@@ -18,6 +18,7 @@ import org.w3c.dom.ls.LSResourceResolver;
 import org.xml.sax.EntityResolver;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+import org.xml.sax.ext.DefaultHandler2;
 import org.xml.sax.ext.EntityResolver2;
 
 /**
@@ -92,44 +93,55 @@ final class Resolvers {
     }
 
     /**
-     * {@link EntityResolver2} that consults an optional caller-supplied resolver and denies (throws) whatever the caller does not resolve.
+     * Entity resolver that consults an optional caller-supplied resolver and denies (throws) whatever the caller does not resolve.
      *
      * <p>This is the entity-resolution counterpart of the JAXP 1.5 {@code ACCESS_EXTERNAL_*} properties: a non-overridable floor. The hardened DOM and SAX
-     * wrappers install one of these and, when the caller sets their own {@link EntityResolver}, re-wrap it here rather than letting it replace the floor. A
-     * caller therefore opts a specific resource in by returning a non-{@code null} {@link InputSource} from their resolver; anything they leave unresolved (a
-     * {@code null} return, or no caller resolver at all) is refused instead of fetched.</p>
+     * wrappers install one of these and, when the caller sets their own {@link EntityResolver}, route it through {@link #setDelegate} rather than letting it
+     * replace the floor. A caller therefore opts a specific resource in by returning a non-{@code null} {@link InputSource} from their resolver; anything they
+     * leave unresolved (a {@code null} return, or no caller resolver at all) goes to {@link #onUnresolved}, which denies by default.</p>
      *
-     * <p>Only {@link #resolveEntity(String, String, String, String) resolveEntity} (the actual external fetch) falls back to denying. {@link #getExternalSubset}
-     * delegates when possible and otherwise returns {@code null} (the canonical "no synthetic subset" signal); denying there would break ordinary parsing.</p>
+     * <p>It extends {@link DefaultHandler2} so it is also usable as a {@link org.xml.sax.ext.LexicalHandler} (see {@code AndroidProvider}, whose subclass needs
+     * {@code startDTD}/{@code endDTD}); {@link #getExternalSubset} therefore inherits the {@code DefaultHandler2} "no synthetic subset" default. Only
+     * {@link #resolveEntity(String, String, String, String) resolveEntity} (the actual external fetch) reaches the deny fallback.</p>
      */
-    static final class FallbackDenyResolver implements EntityResolver2 {
+    static class FallbackDenyResolver extends DefaultHandler2 {
 
         /**
          * Caller-supplied resolver consulted first, or {@code null} for a pure deny-all floor.
          */
-        private final EntityResolver delegate;
+        private EntityResolver delegate;
 
         FallbackDenyResolver(final EntityResolver delegate) {
             this.delegate = delegate;
         }
 
-        @Override
-        public InputSource getExternalSubset(final String name, final String baseURI) throws SAXException, IOException {
-            return delegate instanceof EntityResolver2 ? ((EntityResolver2) delegate).getExternalSubset(name, baseURI) : null;
+        /** Replaces the caller resolver consulted ahead of the floor; lets a single floor instance back successive {@code setEntityResolver} calls. */
+        final void setDelegate(final EntityResolver delegate) {
+            this.delegate = delegate;
+        }
+
+        final EntityResolver getDelegate() {
+            return delegate;
         }
 
         @Override
-        public InputSource resolveEntity(final String publicId, final String systemId) throws SAXException, IOException {
+        public final InputSource resolveEntity(final String publicId, final String systemId) throws SAXException, IOException {
             return resolveEntity(null, publicId, null, systemId);
         }
 
         @Override
-        public InputSource resolveEntity(final String name, final String publicId, final String baseURI, final String systemId)
+        public final InputSource resolveEntity(final String name, final String publicId, final String baseURI, final String systemId)
                 throws SAXException, IOException {
             final InputSource resolved = resolveWithDelegate(name, publicId, baseURI, systemId);
-            if (resolved != null) {
-                return resolved;
-            }
+            return resolved != null ? resolved : onUnresolved(name, publicId, baseURI, systemId);
+        }
+
+        /**
+         * Outcome when neither the caller delegate nor this resolver provides the entity. Denies by default; a subclass may permit specific lookups (e.g. the
+         * external DTD subset) by returning {@code null} or an {@link InputSource} instead of calling {@code super}.
+         */
+        protected InputSource onUnresolved(final String name, final String publicId, final String baseURI, final String systemId)
+                throws SAXException, IOException {
             throw new SAXException(forbiddenMessage(name, null, publicId, systemId, baseURI));
         }
 

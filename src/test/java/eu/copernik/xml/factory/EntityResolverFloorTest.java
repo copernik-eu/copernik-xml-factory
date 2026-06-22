@@ -99,7 +99,6 @@ class EntityResolverFloorTest {
     @Test
     @Tag("sax")
     void saxReaderResolvesAllowListed() throws Exception {
-        Assumptions.assumeFalse(AttackTestSupport.IS_ANDROID, "Android KXmlParser does not resolve external entities through an EntityResolver");
         final XMLReader reader = hardenedReader();
         reader.setEntityResolver(ALLOW_LIST);
         final StringBuilder text = new StringBuilder();
