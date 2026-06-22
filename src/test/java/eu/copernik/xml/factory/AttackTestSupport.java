@@ -732,7 +732,7 @@ final class AttackTestSupport {
         factory.setNamespaceAware(true);
         final XMLReader reader = strictXMLReader(factory);
         suppressException(() -> reader.setProperty(JDK_ENTITY_EXPANSION_LIMIT, "0"));
-        return new SAXSource(IS_ANDROID ? new AndroidProvider.GuardedXMLReader(reader) : reader, new InputSource(new StringReader(xml)));
+        return new SAXSource(IS_ANDROID ? new AndroidProvider.ExpatFeatureGuard(reader) : reader, new InputSource(new StringReader(xml)));
     }
 
     private static boolean probeAndroid() {

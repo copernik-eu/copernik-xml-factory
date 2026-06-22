@@ -169,11 +169,15 @@ public final class XmlFactories {
      *         its settings to it.
      */
     public static XMLReader harden(final XMLReader reader) {
+        if (reader instanceof HardeningXMLReader) {
+            // Already hardened (any provider); hardening is idempotent.
+            return reader;
+        }
         switch (reader.getClass().getName()) {
             case "com.sun.org.apache.xerces.internal.jaxp.SAXParserImpl$JAXPSAXParser":
                 return StockJdkProvider.configure(reader);
             case "org.apache.harmony.xml.ExpatReader":
-            case "eu.copernik.xml.factory.AndroidProvider$GuardedXMLReader":
+            case "eu.copernik.xml.factory.AndroidProvider$ExpatFeatureGuard":
                 return AndroidProvider.configure(reader);
             case "org.apache.xerces.jaxp.SAXParserImpl$JAXPSAXParser":
                 return XercesProvider.configure(reader);

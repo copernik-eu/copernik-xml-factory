@@ -54,23 +54,18 @@ final class XercesProvider {
     /**
      * Hardened Xerces {@link DocumentBuilderFactory} wrapper.
      *
-     * <p>Sets the deny-all {@link EntityResolver} on every {@link DocumentBuilder} produced; required because {@link DocumentBuilderFactory} carries no
-     * resolver of its own and Xerces does not honour JAXP 1.5 {@code ACCESS_EXTERNAL_*}.</p>
+     * <p>Wraps every {@link DocumentBuilder} produced in a {@link HardeningDocumentBuilder}, which keeps a deny-all {@link EntityResolver} floor; required
+     * because {@link DocumentBuilderFactory} carries no resolver of its own and Xerces does not honour JAXP 1.5 {@code ACCESS_EXTERNAL_*}.</p>
      */
     private static final class HardeningDocumentBuilderFactory extends DelegatingDocumentBuilderFactory {
 
-        private final EntityResolver resolver;
-
-        HardeningDocumentBuilderFactory(final DocumentBuilderFactory delegate, final EntityResolver resolver) {
+        HardeningDocumentBuilderFactory(final DocumentBuilderFactory delegate) {
             super(delegate);
-            this.resolver = resolver;
         }
 
         @Override
         public DocumentBuilder newDocumentBuilder() throws ParserConfigurationException {
-            final DocumentBuilder builder = super.newDocumentBuilder();
-            builder.setEntityResolver(resolver);
-            return builder;
+            return new HardeningDocumentBuilder(super.newDocumentBuilder());
         }
     }
 
@@ -119,8 +114,8 @@ final class XercesProvider {
         final Object securityManager = newSecurityManager();
         Limits.applyToXerces(securityManager);
         factory.setAttribute(XERCES_SECURITY_MANAGER_PROPERTY, securityManager);
-        // Required: Xerces does not honour JAXP 1.5 ACCESS_EXTERNAL_*; the wrapper installs a deny-all resolver on every DocumentBuilder.
-        return new HardeningDocumentBuilderFactory(factory, Resolvers.DenyAll.ENTITY2);
+        // Required: Xerces does not honour JAXP 1.5 ACCESS_EXTERNAL_*; the wrapper keeps a deny-all resolver floor on every DocumentBuilder.
+        return new HardeningDocumentBuilderFactory(factory);
     }
 
     static SAXParserFactory configure(final SAXParserFactory factory) {
@@ -143,9 +138,8 @@ final class XercesProvider {
         } catch (final SAXNotRecognizedException | SAXNotSupportedException e) {
             throw new HardeningException("Failed to read Xerces security manager from XMLReader", e);
         }
-        // Required: Xerces does not honour JAXP 1.5 ACCESS_EXTERNAL_*; the deny-all resolver is the only block.
-        reader.setEntityResolver(Resolvers.DenyAll.ENTITY2);
-        return reader;
+        // Required: Xerces does not honour JAXP 1.5 ACCESS_EXTERNAL_*; the wrapper keeps a deny-all resolver floor that a caller-set resolver cannot replace.
+        return new HardeningXMLReader(reader);
     }
 
     static SchemaFactory configure(final SchemaFactory factory) {

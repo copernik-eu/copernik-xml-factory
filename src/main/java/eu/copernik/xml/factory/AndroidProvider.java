@@ -5,12 +5,11 @@
 
 package eu.copernik.xml.factory;
 
+import java.io.IOException;
 import java.util.Objects;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
 import org.xml.sax.EntityResolver;
@@ -19,7 +18,6 @@ import org.xml.sax.SAXException;
 import org.xml.sax.SAXNotRecognizedException;
 import org.xml.sax.SAXNotSupportedException;
 import org.xml.sax.XMLReader;
-import org.xml.sax.ext.DefaultHandler2;
 import org.xml.sax.ext.LexicalHandler;
 
 /**
@@ -35,8 +33,8 @@ import org.xml.sax.ext.LexicalHandler;
  * <p>What the SAX/Expat surface exposes:</p>
  * <ul>
  *     <li>SAX features: only {@code namespaces}, {@code namespace-prefixes}, {@code string-interning}, {@code validation},
- *         {@code external-general-entities} and {@code external-parameter-entities}. The last three are read-only and cannot be enabled.
- *         Setting both {@code namespaces} and {@code namespace-prefixes} triggers an automatic exception at parse time.</li>
+ *         {@code external-general-entities} and {@code external-parameter-entities}. The last three are read-only and cannot be enabled. {@code namespace-prefixes}
+ *         is recognised but enabling it is a no-op, and enabling it together with {@code namespaces} triggers an exception at parse time.</li>
  *     <li>SAX properties: only {@code lexical-handler}.</li>
  *     <li>{@link XMLConstants#FEATURE_SECURE_PROCESSING} and JAXP 1.5 {@code ACCESS_EXTERNAL_*} are not recognised.</li>
  *     <li>Entity expansion: native libexpat enforces a built-in Billion Laughs check (compiled-in activation threshold and amplification factor), so internal
@@ -53,38 +51,30 @@ import org.xml.sax.ext.LexicalHandler;
  *     <li>Entity expansion: KXmlParser does not support user-defined entities and they are silently dropped.</li>
  * </ul>
  *
- * <p>The SAX path installs a {@link DtdAwareDenyResolver} as both {@link EntityResolver} and {@link LexicalHandler}: it allows the external subset to load
- * silently (so a DOCTYPE that names an external DTD but does not use it parses) and throws on every external general or parameter entity reference.</p>
+ * <p>The SAX path reuses {@link HardeningXMLReader} and {@link HardeningSAXParserFactory}, with a {@link DtdAwareDenyResolver} (a
+ * {@link Resolvers.FallbackDenyResolver} subclass) as the floor: it is installed as both the {@link LexicalHandler} and the entity-resolver floor, allows the
+ * external subset to load silently (so a DOCTYPE that names an external DTD but does not use it parses) and denies every external general or parameter entity
+ * reference. A caller-set {@link EntityResolver} (including the handler that {@code SAXParser.parse(source, handler)} installs) is consulted first, but anything
+ * it does not resolve falls through to the floor. {@link ExpatFeatureGuard} adds only the {@code setFeature} guard for ExpatReader's {@code namespace-prefixes}
+ * quirk.</p>
  */
 final class AndroidProvider {
 
     /**
-     * Resolver that denies every external resource lookup, except the external DTD subset declared by the DOCTYPE
+     * Deny floor that additionally lets the external DTD subset declared by the DOCTYPE be skipped silently; merely <em>declaring</em> an external subset does
+     * not throw.
      *
-     * <p>Merely <em>declaring</em> an external subset does not cause the parse to throw.</p>
+     * <p>As a {@link Resolvers.FallbackDenyResolver} it consults the caller's resolver first; as a {@link LexicalHandler} (via {@link org.xml.sax.ext.DefaultHandler2})
+     * it tracks the declared subset's identifiers so {@link #onUnresolved} can tell the subset apart from a forbidden external general or parameter entity.</p>
      */
-    private static final class DtdAwareDenyResolver extends DefaultHandler2 {
-
-        private static String forbiddenMessage(final String publicId, final String systemId) {
-            return String.format("External Entity: failed to read external entity (publicId='%s', systemId='%s'); external entity access is denied.",
-                    publicId, systemId);
-        }
+    private static final class DtdAwareDenyResolver extends Resolvers.FallbackDenyResolver {
 
         private String dtdPublicId;
         private String dtdSystemId;
         private boolean inDtd;
 
-        @Override
-        public void endDTD() {
-            inDtd = false;
-        }
-
-        @Override
-        public InputSource resolveEntity(final String publicId, final String systemId) throws SAXException {
-            if (inDtd && Objects.equals(publicId, dtdPublicId) && Objects.equals(systemId, dtdSystemId)) {
-                return null;
-            }
-            throw new SAXException(forbiddenMessage(publicId, systemId));
+        DtdAwareDenyResolver() {
+            super(null);
         }
 
         @Override
@@ -93,62 +83,42 @@ final class AndroidProvider {
             dtdPublicId = publicId;
             dtdSystemId = systemId;
         }
-    }
 
-    /**
-     * {@link SAXParser} wrapper whose {@link #getXMLReader()} returns a {@link GuardedXMLReader}.
-     */
-    private static final class GuardedSAXParser extends DelegatingSAXParser {
-
-        private final XMLReader guardedReader;
-
-        GuardedSAXParser(final SAXParser delegate, final XMLReader guardedReader) {
-            super(delegate);
-            this.guardedReader = guardedReader;
+        @Override
+        public void endDTD() {
+            inDtd = false;
         }
 
         @Override
-        public XMLReader getXMLReader() {
-            return guardedReader;
+        protected InputSource onUnresolved(final String name, final String publicId, final String baseURI, final String systemId)
+                throws SAXException, IOException {
+            // Declaring (but not using) an external subset must not throw: let the parser skip it silently. Everything else is denied by the floor.
+            if (inDtd && Objects.equals(publicId, dtdPublicId) && Objects.equals(systemId, dtdSystemId)) {
+                return null;
+            }
+            return super.onUnresolved(name, publicId, baseURI, systemId);
         }
     }
 
     /**
-     * {@link SAXParserFactory} wrapper that produces {@link GuardedSAXParser}s.
-     */
-    private static final class GuardedSAXParserFactory extends DelegatingSAXParserFactory {
-
-        GuardedSAXParserFactory(final SAXParserFactory delegate) {
-            super(delegate);
-        }
-
-        @Override
-        public SAXParser newSAXParser() throws ParserConfigurationException, SAXException {
-            final SAXParser parser = super.newSAXParser();
-            return new GuardedSAXParser(parser, configure(parser.getXMLReader()));
-        }
-    }
-
-    /**
-     * {@link XMLReader} wrapper that surfaces ExpatReader's conflicting-feature error at {@code setFeature} time rather than at {@code parse} time.
+     * {@link XMLReader} wrapper that surfaces ExpatReader's unsupported-feature behaviour at {@code setFeature} time.
      *
-     * <p>Android's {@code ExpatReader.parse()} throws {@link SAXNotSupportedException} when {@code namespaces} and {@code namespace-prefixes} are both
-     * enabled. Reporting the error at configuration time lets consumers, such as Apache Xalan's identity transformer, catch the exception and still parse
-     * the document. Without the wrapper, parsing fails.</p>
+     * <p>ExpatReader supports only the {@code namespaces} feature; it recognises {@code namespace-prefixes} but enabling it is a no-op, and enabling both at once
+     * makes {@code ExpatReader.parse()} throw {@link SAXNotSupportedException}. Rejecting {@code namespace-prefixes=true} up front prevents that conflict and lets
+     * consumers such as Apache Xalan's identity transformer catch the exception at configuration time and still parse. This guard carries no entity-resolution
+     * hardening, so it also serves as the permissive (unhardened) positive control.</p>
      */
-    static final class GuardedXMLReader extends DelegatingXMLReader {
+    static final class ExpatFeatureGuard extends DelegatingXMLReader {
 
-        GuardedXMLReader(final XMLReader delegate) {
+        ExpatFeatureGuard(final XMLReader delegate) {
             super(delegate);
         }
 
         @Override
         public void setFeature(final String name, final boolean value) throws SAXNotRecognizedException, SAXNotSupportedException {
-            if (value
-                    && (NAMESPACE_PREFIXES_FEATURE.equals(name) && super.getFeature(NAMESPACES_FEATURE)
-                    || NAMESPACES_FEATURE.equals(name) && super.getFeature(NAMESPACE_PREFIXES_FEATURE))) {
-                throw new SAXNotSupportedException("ExpatReader cannot have both '" + NAMESPACES_FEATURE + "' and '" + NAMESPACE_PREFIXES_FEATURE + "' " +
-                        "enabled simultaneously");
+            if (value && NAMESPACE_PREFIXES_FEATURE.equals(name)) {
+                throw new SAXNotSupportedException(
+                        "ExpatReader does not support enabling '" + NAMESPACE_PREFIXES_FEATURE + "'; only '" + NAMESPACES_FEATURE + "' is supported");
             }
             super.setFeature(name, value);
         }
@@ -165,21 +135,23 @@ final class AndroidProvider {
     }
 
     static SAXParserFactory configure(final SAXParserFactory factory) {
-        return new GuardedSAXParserFactory(factory);
+        return new HardeningSAXParserFactory(factory, AndroidProvider::configure);
     }
 
     static XMLReader configure(final XMLReader reader) {
-        if (reader instanceof GuardedXMLReader) {
-            return reader;
-        }
-        final DtdAwareDenyResolver resolver = new DtdAwareDenyResolver();
-        reader.setEntityResolver(resolver);
+        // The SAXParserFactory hardener passes a raw ExpatReader.
+        // Idempotency for an already-hardened HardeningXMLReader lives in XmlFactories.harden.
+        final XMLReader guarded = reader instanceof ExpatFeatureGuard ? reader : new ExpatFeatureGuard(reader);
+        final DtdAwareDenyResolver floor = new DtdAwareDenyResolver();
         try {
-            reader.setProperty(LEXICAL_HANDLER_PROPERTY, resolver);
+            guarded.setProperty(LEXICAL_HANDLER_PROPERTY, floor);
         } catch (final SAXException e) {
             // ExpatReader recognises the lexical-handler property; if a future replacement does not, fall through and lose subset-vs-entity discrimination.
         }
-        return new GuardedXMLReader(reader);
+        // The floor doubles as the lexical handler (it tracks DTD state) and the entity-resolver floor.
+        // HardeningXMLReader keeps it non-bypassable and routes a caller-set resolver through it.
+        // ExpatFeatureGuard adds the namespace-prefixes guard underneath.
+        return new HardeningXMLReader(guarded, floor);
     }
 
     private AndroidProvider() {
