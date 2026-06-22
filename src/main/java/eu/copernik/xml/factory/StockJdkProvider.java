@@ -10,7 +10,9 @@ import static eu.copernik.xml.factory.JaxpSetters.setFeature;
 import static eu.copernik.xml.factory.JaxpSetters.setProperty;
 
 import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParserFactory;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.transform.TransformerFactory;
@@ -18,6 +20,7 @@ import javax.xml.transform.sax.SAXTransformerFactory;
 import javax.xml.validation.SchemaFactory;
 import javax.xml.xpath.XPathFactory;
 
+import org.xml.sax.EntityResolver;
 import org.xml.sax.XMLReader;
 
 /**
@@ -46,6 +49,33 @@ import org.xml.sax.XMLReader;
 final class StockJdkProvider {
 
     /**
+     * {@link DocumentBuilderFactory} wrapper that installs a deny-all {@link EntityResolver} on every
+     * {@link DocumentBuilder} produced.
+     *
+     * <p>Required because the Stock JDK's XInclude processor consults the parser's {@link EntityResolver}
+     * when resolving {@code xi:include} hrefs, but does not honour {@code ACCESS_EXTERNAL_*} attributes.
+     * The wrapper sets {@link Resolvers.DenyAll#ENTITY2} on each {@link DocumentBuilder} so that XInclude
+     * fetches are blocked by default; callers that want to allow-list specific resources can override the
+     * resolver on the returned builder.</p>
+     */
+    private static final class HardeningDocumentBuilderFactory extends DelegatingDocumentBuilderFactory {
+
+        private final EntityResolver resolver;
+
+        HardeningDocumentBuilderFactory(final DocumentBuilderFactory delegate, final EntityResolver resolver) {
+            super(delegate);
+            this.resolver = resolver;
+        }
+
+        @Override
+        public DocumentBuilder newDocumentBuilder() throws ParserConfigurationException {
+            final DocumentBuilder builder = super.newDocumentBuilder();
+            builder.setEntityResolver(resolver);
+            return builder;
+        }
+    }
+
+    /**
      * {@code jdk.xml.overrideDefaultParser}: pin to the JDK's bundled SAX parser; defense-in-depth against a sysprop swap to a third-party parser.
      */
     private static final String FEATURE_OVERRIDE_DEFAULT_PARSER = "jdk.xml.overrideDefaultParser";
@@ -70,7 +100,9 @@ final class StockJdkProvider {
         // Defense-in-depth: already FSP-secure defaults, set explicitly so they are not relaxed via system property.
         setAttribute(factory, XMLConstants.ACCESS_EXTERNAL_DTD, "");
         setAttribute(factory, XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
-        return factory;
+        // Required: Stock JDK XInclude processor ignores ACCESS_EXTERNAL_*; a deny-all EntityResolver on every
+        // DocumentBuilder is the only way to block xi:include href resolution. Callers can override it to allow-list.
+        return new HardeningDocumentBuilderFactory(factory, Resolvers.DenyAll.ENTITY2);
     }
 
     static SAXParserFactory configure(final SAXParserFactory factory) {
@@ -92,6 +124,9 @@ final class StockJdkProvider {
         // Defense-in-depth: already FSP-secure defaults, set explicitly so they are not relaxed via system property.
         setProperty(reader, XMLConstants.ACCESS_EXTERNAL_DTD, "");
         setProperty(reader, XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        // Required: Stock JDK XInclude processor ignores ACCESS_EXTERNAL_*; the deny-all EntityResolver is the only
+        // way to block xi:include href resolution. Callers can override it on the reader to allow-list.
+        reader.setEntityResolver(Resolvers.DenyAll.ENTITY2);
         return reader;
     }
 
