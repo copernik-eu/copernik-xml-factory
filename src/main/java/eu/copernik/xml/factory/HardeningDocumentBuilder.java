@@ -17,23 +17,22 @@ import org.xml.sax.EntityResolver;
  */
 final class HardeningDocumentBuilder extends DelegatingDocumentBuilder {
 
+    private final Resolvers.FallbackDenyResolver floor = new Resolvers.FallbackDenyResolver(null);
+
     HardeningDocumentBuilder(final DocumentBuilder delegate) {
         super(delegate);
-        installFloor();
+        super.setEntityResolver(floor);
     }
 
     @Override
     public void setEntityResolver(final EntityResolver resolver) {
-        super.setEntityResolver(new Resolvers.FallbackDenyResolver(resolver));
+        floor.setDelegate(resolver);
     }
 
     @Override
     public void reset() {
         super.reset();
-        installFloor();
-    }
-
-    private void installFloor() {
-        super.setEntityResolver(new Resolvers.FallbackDenyResolver(null));
+        floor.setDelegate(null);
+        super.setEntityResolver(floor);
     }
 }

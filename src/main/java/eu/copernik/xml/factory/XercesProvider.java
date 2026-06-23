@@ -10,7 +10,6 @@ import static eu.copernik.xml.factory.JaxpSetters.setFeature;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 import javax.xml.validation.Schema;
@@ -50,24 +49,6 @@ import org.xml.sax.XMLReader;
  * </ul>
  */
 final class XercesProvider {
-
-    /**
-     * Hardened Xerces {@link DocumentBuilderFactory} wrapper.
-     *
-     * <p>Wraps every {@link DocumentBuilder} produced in a {@link HardeningDocumentBuilder}, which keeps a deny-all {@link EntityResolver} floor; required
-     * because {@link DocumentBuilderFactory} carries no resolver of its own and Xerces does not honour JAXP 1.5 {@code ACCESS_EXTERNAL_*}.</p>
-     */
-    private static final class HardeningDocumentBuilderFactory extends DelegatingDocumentBuilderFactory {
-
-        HardeningDocumentBuilderFactory(final DocumentBuilderFactory delegate) {
-            super(delegate);
-        }
-
-        @Override
-        public DocumentBuilder newDocumentBuilder() throws ParserConfigurationException {
-            return new HardeningDocumentBuilder(super.newDocumentBuilder());
-        }
-    }
 
     private static Validator hardenValidator(final Validator validator) {
         try {
