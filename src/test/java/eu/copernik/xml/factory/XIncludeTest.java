@@ -339,4 +339,68 @@ class XIncludeTest {
         assertThrows(Exception.class, () -> reader.parse(xmlFile.getAbsolutePath()),
                 "SAX with allow-list should block non-allowed href");
     }
+
+    // ── Piotr scenario: XInclude-enabled reader from external source → harden() → blocked ────────────────────────────
+    //
+    // An unhardened SAXParserFactory with setXIncludeAware(true) produces a reader where XInclude is active.
+    // Passing that reader through XmlFactories.harden() must install a deny-all EntityResolver that blocks
+    // xi:include href resolution, even though XInclude was enabled before hardening.
+
+    @Test
+    @Tag("sax")
+    void hardenReaderBlocksParseXml(@TempDir final Path tmp) throws Exception {
+        final String referencedUrl = writePayload(tmp, "ref.xml",
+                "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
+        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
+
+        // Reader from an unhardened factory that already has XInclude enabled
+        final SAXParserFactory unhardenedFactory = SAXParserFactory.newInstance();
+        unhardenedFactory.setNamespaceAware(true);
+        unhardenedFactory.setXIncludeAware(true);
+        final XMLReader reader = unhardenedFactory.newSAXParser().getXMLReader();
+        XmlFactories.harden(reader);
+        assertThrows(Exception.class, () -> reader.parse(xmlFile.getAbsolutePath()),
+                "harden(reader) should block XInclude parse=xml on reader with XInclude already enabled");
+    }
+
+    @Test
+    @Tag("sax")
+    void hardenReaderBlocksParseText(@TempDir final Path tmp) throws Exception {
+        final String referencedUrl = writePayload(tmp, "ref.txt",
+                LEAKED_MARKER + "\n").toURI().toString();
+        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
+
+        final SAXParserFactory unhardenedFactory = SAXParserFactory.newInstance();
+        unhardenedFactory.setNamespaceAware(true);
+        unhardenedFactory.setXIncludeAware(true);
+        final XMLReader reader = unhardenedFactory.newSAXParser().getXMLReader();
+        XmlFactories.harden(reader);
+        assertThrows(Exception.class, () -> reader.parse(xmlFile.getAbsolutePath()),
+                "harden(reader) should block XInclude parse=text on reader with XInclude already enabled");
+    }
+
+    @Test
+    @Tag("sax")
+    void hardenReaderAllowListResolvesParseXml(@TempDir final Path tmp) throws Exception {
+        final String referencedUrl = writePayload(tmp, "ref.xml",
+                "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
+        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
+
+        final SAXParserFactory unhardenedFactory = SAXParserFactory.newInstance();
+        unhardenedFactory.setNamespaceAware(true);
+        unhardenedFactory.setXIncludeAware(true);
+        final XMLReader reader = unhardenedFactory.newSAXParser().getXMLReader();
+        XmlFactories.harden(reader);
+        reader.setEntityResolver(new AllowListResolver(referencedUrl));
+        final StringBuilder captured = new StringBuilder();
+        reader.setContentHandler(new DefaultHandler() {
+            @Override
+            public void characters(final char[] ch, final int start, final int length) {
+                captured.append(ch, start, length);
+            }
+        });
+        reader.parse(xmlFile.getAbsolutePath());
+        assertTrue(captured.toString().contains("resolved"),
+                "harden(reader) + allow-list should resolve on reader with XInclude already enabled; got: " + captured);
+    }
 }
