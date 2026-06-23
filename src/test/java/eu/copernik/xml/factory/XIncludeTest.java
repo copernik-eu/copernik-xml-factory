@@ -18,6 +18,7 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.SAXParserFactory;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -81,11 +82,26 @@ class XIncludeTest {
         return file;
     }
 
+    /**
+     * Assumes XInclude is supported by the platform: on Android {@code setXIncludeAware(true)} always throws
+     * {@link UnsupportedOperationException}, so every test in this class must be skipped there.
+     */
+    private static void assumeXIncludeSupported() {
+        final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        dbf.setNamespaceAware(true);
+        try {
+            dbf.setXIncludeAware(true);
+        } catch (final UnsupportedOperationException e) {
+            Assumptions.abort("XInclude not supported on this platform");
+        }
+    }
+
     // ── Baseline: unhardened JAXP is vulnerable (sanity check that the PoC is real) ─────────────────────────────────
 
     @Test
     @Tag("dom")
     void baselineDomLeaksParseXml(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.xml",
                 "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
@@ -102,6 +118,7 @@ class XIncludeTest {
     @Test
     @Tag("dom")
     void baselineDomLeaksParseText(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.txt",
                 LEAKED_MARKER + "\n").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
@@ -118,6 +135,7 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void baselineSaxLeaksParseXml(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.xml",
                 "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
@@ -141,6 +159,7 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void baselineSaxLeaksParseText(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.txt",
                 LEAKED_MARKER + "\n").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
@@ -166,6 +185,7 @@ class XIncludeTest {
     @Test
     @Tag("dom")
     void hardenedDomBlocksParseXml(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.xml",
                 "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
@@ -182,6 +202,7 @@ class XIncludeTest {
     @Test
     @Tag("dom")
     void hardenedDomBlocksParseText(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.txt",
                 LEAKED_MARKER + "\n").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
@@ -198,6 +219,7 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenedSaxBlocksParseXml(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.xml",
                 "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
@@ -213,6 +235,7 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenedSaxBlocksParseText(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.txt",
                 LEAKED_MARKER + "\n").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
@@ -230,6 +253,7 @@ class XIncludeTest {
     @Test
     @Tag("dom")
     void hardenedDomWithAllowListResolvesParseXml(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.xml",
                 "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
@@ -248,6 +272,7 @@ class XIncludeTest {
     @Test
     @Tag("dom")
     void hardenedDomWithAllowListResolvesParseText(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.txt",
                 LEAKED_MARKER + "\n").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
@@ -266,6 +291,7 @@ class XIncludeTest {
     @Test
     @Tag("dom")
     void hardenedDomWithAllowListBlocksNonAllowed(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.xml",
                 "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
@@ -282,6 +308,7 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenedSaxWithAllowListResolvesParseXml(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.xml",
                 "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
@@ -305,6 +332,7 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenedSaxWithAllowListResolvesParseText(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.txt",
                 LEAKED_MARKER + "\n").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
@@ -328,6 +356,7 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenedSaxWithAllowListBlocksNonAllowed(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.xml",
                 "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
@@ -349,6 +378,7 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenReaderBlocksParseXml(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.xml",
                 "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
@@ -366,6 +396,7 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenReaderBlocksParseText(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.txt",
                 LEAKED_MARKER + "\n").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
@@ -382,6 +413,7 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenReaderAllowListResolvesParseXml(@TempDir final Path tmp) throws Exception {
+        assumeXIncludeSupported();
         final String referencedUrl = writePayload(tmp, "ref.xml",
                 "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
         final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
