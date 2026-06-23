@@ -98,7 +98,7 @@ final class AttackTestSupport {
      * error or fatalError so the helpers can observe the block via the same mechanism the spec uses to surface it. Warnings stay silent: they are not security
      * signals.</p>
      */
-    private static final class StrictReporter implements ErrorListener, ErrorHandler {
+    static final class StrictReporter implements ErrorListener, ErrorHandler {
 
         @Override
         public void error(final SAXParseException exception) throws SAXException {
@@ -732,7 +732,7 @@ final class AttackTestSupport {
         factory.setNamespaceAware(true);
         final XMLReader reader = strictXMLReader(factory);
         suppressException(() -> reader.setProperty(JDK_ENTITY_EXPANSION_LIMIT, "0"));
-        return new SAXSource(IS_ANDROID ? new AndroidProvider.GuardedXMLReader(reader) : reader, new InputSource(new StringReader(xml)));
+        return new SAXSource(IS_ANDROID ? new AndroidProvider.ExpatFeatureGuard(reader) : reader, new InputSource(new StringReader(xml)));
     }
 
     private static boolean probeAndroid() {
@@ -790,7 +790,7 @@ final class AttackTestSupport {
     /**
      * Builds a {@link DocumentBuilder} from {@code factory} with {@link #STRICT_REPORTER} installed as its error handler.
      */
-    private static DocumentBuilder strictDocumentBuilder(final DocumentBuilderFactory factory) throws ParserConfigurationException {
+    static DocumentBuilder strictDocumentBuilder(final DocumentBuilderFactory factory) throws ParserConfigurationException {
         final DocumentBuilder builder = factory.newDocumentBuilder();
         builder.setErrorHandler(STRICT_REPORTER);
         return builder;
@@ -854,7 +854,7 @@ final class AttackTestSupport {
     /**
      * Installs {@link #STRICT_REPORTER} as the error handler on {@code reader} and returns it; for raw-reader paths.
      */
-    private static XMLReader strictXMLReader(final XMLReader reader) {
+    static XMLReader strictXMLReader(final XMLReader reader) {
         reader.setErrorHandler(STRICT_REPORTER);
         return reader;
     }

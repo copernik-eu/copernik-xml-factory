@@ -19,6 +19,9 @@ import org.xml.sax.XMLReader;
  *
  * <p>{@link SAXParserFactory} has no property API, only a feature API. Therefore, complex configuration must be performed on each new
  * {@link XMLReader} parser.</p>
+ *
+ * <p>The produced {@link SAXParser} is wrapped in a {@link HardeningSAXParser} so that the hardener's (possibly wrapping) reader is what every
+ * {@code SAXParser.parse(...)} path uses, not just callers of {@code getXMLReader()}. A hardener that returns the reader unchanged makes this transparent.</p>
  */
 final class HardeningSAXParserFactory extends DelegatingSAXParserFactory {
 
@@ -32,7 +35,7 @@ final class HardeningSAXParserFactory extends DelegatingSAXParserFactory {
     @Override
     public SAXParser newSAXParser() throws ParserConfigurationException, SAXException {
         final SAXParser parser = super.newSAXParser();
-        hardener.apply(parser.getXMLReader());
-        return parser;
+        final XMLReader reader = hardener.apply(parser.getXMLReader());
+        return new HardeningSAXParser(parser, reader);
     }
 }
