@@ -54,9 +54,9 @@ final class StockJdkProvider {
      *
      * <p>Required because the Stock JDK's XInclude processor consults the parser's {@link EntityResolver}
      * when resolving {@code xi:include} hrefs, but does not honour {@code ACCESS_EXTERNAL_*} attributes.
-     * The wrapper sets {@link Resolvers.DenyAll#ENTITY2} on each {@link DocumentBuilder} so that XInclude
-     * fetches are blocked by default; callers that want to allow-list specific resources can override the
-     * resolver on the returned builder.</p>
+     * The wrapper installs a {@link Resolvers.FallbackDenyResolver} on each {@link DocumentBuilder} so
+     * that XInclude fetches are blocked by default; callers that want to allow-list specific resources
+     * can override the resolver on the returned builder.</p>
      */
     private static final class HardeningDocumentBuilderFactory extends DelegatingDocumentBuilderFactory {
 
@@ -102,7 +102,7 @@ final class StockJdkProvider {
         setAttribute(factory, XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
         // Required: Stock JDK XInclude processor ignores ACCESS_EXTERNAL_*; a deny-all EntityResolver on every
         // DocumentBuilder is the only way to block xi:include href resolution. Callers can override it to allow-list.
-        return new HardeningDocumentBuilderFactory(factory, Resolvers.DenyAll.ENTITY2);
+        return new HardeningDocumentBuilderFactory(factory, new Resolvers.FallbackDenyResolver(null));
     }
 
     static SAXParserFactory configure(final SAXParserFactory factory) {
@@ -126,7 +126,7 @@ final class StockJdkProvider {
         setProperty(reader, XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
         // Required: Stock JDK XInclude processor ignores ACCESS_EXTERNAL_*; the deny-all EntityResolver is the only
         // way to block xi:include href resolution. Callers can override it on the reader to allow-list.
-        reader.setEntityResolver(Resolvers.DenyAll.ENTITY2);
+        reader.setEntityResolver(new Resolvers.FallbackDenyResolver(null));
         return reader;
     }
 
