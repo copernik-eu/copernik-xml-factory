@@ -41,3 +41,13 @@ Guidance for AI coding agents working in this repository.
 ### Commits
 
 - Use the `Assisted-By:` trailer (not `Co-Authored-By:`).
+
+## Security
+
+The security policy and threat model are in [SECURITY.md](SECURITY.md). Before reporting, "fixing", or
+flagging anything security-related in this repository (XXE, external entities, DTD or schema resolution,
+SSRF through external references, entity-expansion or Billion Laughs denial of service, resolver handling, or
+processing limits), read its **Threat Model**: the factories returned by `XmlFactories` are hardened as
+delivered, and the *Known non-findings* and *Triage dispositions* sections state what is and is not a
+vulnerability under this project's model. Report vulnerabilities through GitHub Private Vulnerability
+Reporting, not through public issues, pull requests, or discussions.
