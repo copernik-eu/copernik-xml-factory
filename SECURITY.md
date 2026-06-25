@@ -15,10 +15,10 @@ Do **not** report security issues through public GitHub issues, pull requests, o
 
 ## Threat Model
 
-This model is versioned with the library: a report against a released version is triaged against the model as
-it stood at that version, not at `HEAD`. A finding that breaks something listed under [What is in
-scope](#what-is-in-scope) should be reported through the channel above; a finding that falls under [What is
-out of scope](#what-is-out-of-scope) will be closed citing this section.
+This is the threat model for the **0.1.x** release line.
+It is versioned with the library: a report against a released version is triaged against the model as it stood at that version, not at `HEAD`.
+A finding that breaks something listed under [What is in scope](#what-is-in-scope) should be reported through the channel above;
+a finding that falls under [What is out of scope](#what-is-out-of-scope) will be closed citing this section.
 
 ### Scope and intended use
 

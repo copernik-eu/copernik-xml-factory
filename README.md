@@ -35,7 +35,7 @@ Add the library to your build:
 <dependency>
   <groupId>eu.copernik</groupId>
   <artifactId>copernik-xml-factory</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.2</version>
 </dependency>
 ```
 
