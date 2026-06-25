@@ -1,19 +1,19 @@
 /*
  * SPDX-FileCopyrightText: 2026 Ta Thien
+ * SPDX-FileCopyrightText: 2026 Piotr P. Karwasz <piotr@github.copernik.eu>
  * SPDX-License-Identifier: Apache-2.0
  */
 
 package eu.copernik.xml.factory;
 
 import static eu.copernik.xml.factory.AttackTestSupport.LEAKED_MARKER;
+import static eu.copernik.xml.factory.AttackTestSupport.inputSource;
+import static eu.copernik.xml.factory.AttackTestSupport.resourceUrl;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.StringReader;
-import java.nio.file.Path;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -22,7 +22,6 @@ import javax.xml.parsers.SAXParserFactory;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.w3c.dom.Document;
 import org.xml.sax.EntityResolver;
 import org.xml.sax.InputSource;
@@ -38,11 +37,14 @@ import org.xml.sax.helpers.DefaultHandler;
  * paths. XInclude resolution requires namespace-aware processing; the baseline tests set it explicitly, and the
  * hardened factory tests rely on the underlying JAXP implementation being namespace-aware enough to recognise elements
  * in the {@code http://www.w3.org/2001/XInclude} namespace.</p>
- *
- * <p>Input is written to temp files because the JDK's XInclude processor needs a file-backed {@code systemId} to
- * resolve relative {@code xi:include} hrefs.</p>
  */
 class XIncludeTest {
+
+    /** Absolute URL of the XML fixture pulled in by {@code parse="xml"} includes; carries {@link AttackTestSupport#LEAKED_MARKER}. */
+    private static final String REFERENCED_XML = resourceUrl("referenced.xml").toString();
+
+    /** Absolute URL of the text fixture pulled in by {@code parse="text"} includes; carries {@link AttackTestSupport#LEAKED_MARKER}. */
+    private static final String REFERENCED_TEXT = resourceUrl("referenced.txt").toString();
 
     /**
      * Resolves only the allowed URL; all other lookups throw. This mirrors the pattern a production caller would use
@@ -76,15 +78,6 @@ class XIncludeTest {
                 + "</root>";
     }
 
-    /** Writes the payload to a temp file and returns it. */
-    private static File writePayload(final Path dir, final String name, final String payload) throws IOException {
-        final File file = dir.resolve(name).toFile();
-        try (FileWriter fw = new FileWriter(file)) {
-            fw.write(payload);
-        }
-        return file;
-    }
-
     /**
      * Assumes XInclude is supported by the platform: on Android {@code setXIncludeAware(true)} always throws
      * {@link UnsupportedOperationException}, so every test in this class must be skipped there.
@@ -99,20 +92,18 @@ class XIncludeTest {
         }
     }
 
-    // ── Baseline: unhardened JAXP is vulnerable (sanity check that the PoC is real) ─────────────────────────────────
+    //region Baseline: unhardened JAXP resolves the include
 
     @Test
     @Tag("dom")
-    void baselineDomLeaksParseXml(@TempDir final Path tmp) throws Exception {
+    void baselineDomLeaksParseXml() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.xml",
-                "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         factory.setXIncludeAware(true);
-        final Document doc = factory.newDocumentBuilder().parse(xmlFile);
+        final Document doc = factory.newDocumentBuilder().parse(input);
         final String text = doc.getDocumentElement().getTextContent();
         assertTrue(text != null && text.contains(LEAKED_MARKER),
                 "Baseline DOM parse=xml should leak marker; got: " + text);
@@ -120,16 +111,14 @@ class XIncludeTest {
 
     @Test
     @Tag("dom")
-    void baselineDomLeaksParseText(@TempDir final Path tmp) throws Exception {
+    void baselineDomLeaksParseText() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.txt",
-                LEAKED_MARKER + "\n").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         factory.setXIncludeAware(true);
-        final Document doc = factory.newDocumentBuilder().parse(xmlFile);
+        final Document doc = factory.newDocumentBuilder().parse(input);
         final String text = doc.getDocumentElement().getTextContent();
         assertTrue(text != null && text.contains(LEAKED_MARKER),
                 "Baseline DOM parse=text should leak marker; got: " + text);
@@ -137,11 +126,9 @@ class XIncludeTest {
 
     @Test
     @Tag("sax")
-    void baselineSaxLeaksParseXml(@TempDir final Path tmp) throws Exception {
+    void baselineSaxLeaksParseXml() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.xml",
-                "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final SAXParserFactory factory = SAXParserFactory.newInstance();
         factory.setNamespaceAware(true);
@@ -154,18 +141,16 @@ class XIncludeTest {
                 captured.append(ch, start, length);
             }
         });
-        reader.parse(xmlFile.getAbsolutePath());
+        reader.parse(input);
         assertTrue(captured.toString().contains(LEAKED_MARKER),
                 "Baseline SAX parse=xml should leak marker; got: " + captured);
     }
 
     @Test
     @Tag("sax")
-    void baselineSaxLeaksParseText(@TempDir final Path tmp) throws Exception {
+    void baselineSaxLeaksParseText() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.txt",
-                LEAKED_MARKER + "\n").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final SAXParserFactory factory = SAXParserFactory.newInstance();
         factory.setNamespaceAware(true);
@@ -178,95 +163,89 @@ class XIncludeTest {
                 captured.append(ch, start, length);
             }
         });
-        reader.parse(xmlFile.getAbsolutePath());
+        reader.parse(input);
         assertTrue(captured.toString().contains(LEAKED_MARKER),
                 "Baseline SAX parse=text should leak marker; got: " + captured);
     }
 
-    // ── Hardened factory: fails closed (throws) ─────────────────────────────────────────────────────────────────────
+    //endregion
+
+    //region Hardened factory: fails closed (throws)
 
     @Test
     @Tag("dom")
-    void hardenedDomBlocksParseXml(@TempDir final Path tmp) throws Exception {
+    void hardenedDomBlocksParseXml() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.xml",
-                "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final DocumentBuilderFactory factory = XmlFactories.newDocumentBuilderFactory();
         factory.setNamespaceAware(true);
         factory.setXIncludeAware(true);
         assertThrows(Exception.class, () -> {
             final DocumentBuilder builder = factory.newDocumentBuilder();
-            builder.parse(xmlFile);
+            builder.parse(input);
         }, "Hardened DOM parse=xml should throw");
     }
 
     @Test
     @Tag("dom")
-    void hardenedDomBlocksParseText(@TempDir final Path tmp) throws Exception {
+    void hardenedDomBlocksParseText() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.txt",
-                LEAKED_MARKER + "\n").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final DocumentBuilderFactory factory = XmlFactories.newDocumentBuilderFactory();
         factory.setNamespaceAware(true);
         factory.setXIncludeAware(true);
         assertThrows(Exception.class, () -> {
             final DocumentBuilder builder = factory.newDocumentBuilder();
-            builder.parse(xmlFile);
+            builder.parse(input);
         }, "Hardened DOM parse=text should throw");
     }
 
     @Test
     @Tag("sax")
-    void hardenedSaxBlocksParseXml(@TempDir final Path tmp) throws Exception {
+    void hardenedSaxBlocksParseXml() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.xml",
-                "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final SAXParserFactory factory = XmlFactories.newSAXParserFactory();
         factory.setXIncludeAware(true);
         assertThrows(Exception.class, () -> {
             final XMLReader reader = factory.newSAXParser().getXMLReader();
-            reader.parse(xmlFile.getAbsolutePath());
+            reader.parse(input);
         }, "Hardened SAX parse=xml should throw");
     }
 
     @Test
     @Tag("sax")
-    void hardenedSaxBlocksParseText(@TempDir final Path tmp) throws Exception {
+    void hardenedSaxBlocksParseText() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.txt",
-                LEAKED_MARKER + "\n").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final SAXParserFactory factory = XmlFactories.newSAXParserFactory();
         factory.setXIncludeAware(true);
         assertThrows(Exception.class, () -> {
             final XMLReader reader = factory.newSAXParser().getXMLReader();
-            reader.parse(xmlFile.getAbsolutePath());
+            reader.parse(input);
         }, "Hardened SAX parse=text should throw");
     }
 
-    // ── Hardened factory + allow-list resolver: allowed href works, non-allowed throws ───────────────────────────────
+    //endregion
+
+    //region Hardened factory + allow-list resolver: allowed href works, non-allowed throws
 
     @Test
     @Tag("dom")
-    void hardenedDomWithAllowListResolvesParseXml(@TempDir final Path tmp) throws Exception {
+    void hardenedDomWithAllowListResolvesParseXml() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.xml",
-                "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final DocumentBuilderFactory factory = XmlFactories.newDocumentBuilderFactory();
         factory.setNamespaceAware(true);
         factory.setXIncludeAware(true);
         final DocumentBuilder builder = factory.newDocumentBuilder();
-        builder.setEntityResolver(new AllowListResolver(referencedUrl));
-        final Document doc = builder.parse(xmlFile);
+        builder.setEntityResolver(new AllowListResolver(REFERENCED_XML));
+        final Document doc = builder.parse(input);
         final String text = doc.getDocumentElement().getTextContent();
         assertTrue(text != null && text.contains("resolved"),
                 "DOM parse=xml with allow-list should resolve; got: " + text);
@@ -274,18 +253,16 @@ class XIncludeTest {
 
     @Test
     @Tag("dom")
-    void hardenedDomWithAllowListResolvesParseText(@TempDir final Path tmp) throws Exception {
+    void hardenedDomWithAllowListResolvesParseText() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.txt",
-                LEAKED_MARKER + "\n").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final DocumentBuilderFactory factory = XmlFactories.newDocumentBuilderFactory();
         factory.setNamespaceAware(true);
         factory.setXIncludeAware(true);
         final DocumentBuilder builder = factory.newDocumentBuilder();
-        builder.setEntityResolver(new AllowListResolver(referencedUrl));
-        final Document doc = builder.parse(xmlFile);
+        builder.setEntityResolver(new AllowListResolver(REFERENCED_TEXT));
+        final Document doc = builder.parse(input);
         final String text = doc.getDocumentElement().getTextContent();
         assertTrue(text != null && text.contains("resolved"),
                 "DOM parse=text with allow-list should resolve; got: " + text);
@@ -293,33 +270,29 @@ class XIncludeTest {
 
     @Test
     @Tag("dom")
-    void hardenedDomWithAllowListBlocksNonAllowed(@TempDir final Path tmp) throws Exception {
+    void hardenedDomWithAllowListBlocksNonAllowed() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.xml",
-                "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final DocumentBuilderFactory factory = XmlFactories.newDocumentBuilderFactory();
         factory.setNamespaceAware(true);
         factory.setXIncludeAware(true);
         final DocumentBuilder builder = factory.newDocumentBuilder();
         builder.setEntityResolver(new AllowListResolver("/nonexistent"));
-        assertThrows(Exception.class, () -> builder.parse(xmlFile),
+        assertThrows(Exception.class, () -> builder.parse(input),
                 "DOM with allow-list should block non-allowed href");
     }
 
     @Test
     @Tag("sax")
-    void hardenedSaxWithAllowListResolvesParseXml(@TempDir final Path tmp) throws Exception {
+    void hardenedSaxWithAllowListResolvesParseXml() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.xml",
-                "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final SAXParserFactory factory = XmlFactories.newSAXParserFactory();
         factory.setXIncludeAware(true);
         final XMLReader reader = factory.newSAXParser().getXMLReader();
-        reader.setEntityResolver(new AllowListResolver(referencedUrl));
+        reader.setEntityResolver(new AllowListResolver(REFERENCED_XML));
         final StringBuilder captured = new StringBuilder();
         reader.setContentHandler(new DefaultHandler() {
             @Override
@@ -327,23 +300,21 @@ class XIncludeTest {
                 captured.append(ch, start, length);
             }
         });
-        reader.parse(xmlFile.getAbsolutePath());
+        reader.parse(input);
         assertTrue(captured.toString().contains("resolved"),
                 "SAX parse=xml with allow-list should resolve; got: " + captured);
     }
 
     @Test
     @Tag("sax")
-    void hardenedSaxWithAllowListResolvesParseText(@TempDir final Path tmp) throws Exception {
+    void hardenedSaxWithAllowListResolvesParseText() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.txt",
-                LEAKED_MARKER + "\n").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final SAXParserFactory factory = XmlFactories.newSAXParserFactory();
         factory.setXIncludeAware(true);
         final XMLReader reader = factory.newSAXParser().getXMLReader();
-        reader.setEntityResolver(new AllowListResolver(referencedUrl));
+        reader.setEntityResolver(new AllowListResolver(REFERENCED_TEXT));
         final StringBuilder captured = new StringBuilder();
         reader.setContentHandler(new DefaultHandler() {
             @Override
@@ -351,40 +322,34 @@ class XIncludeTest {
                 captured.append(ch, start, length);
             }
         });
-        reader.parse(xmlFile.getAbsolutePath());
+        reader.parse(input);
         assertTrue(captured.toString().contains("resolved"),
                 "SAX parse=text with allow-list should resolve; got: " + captured);
     }
 
     @Test
     @Tag("sax")
-    void hardenedSaxWithAllowListBlocksNonAllowed(@TempDir final Path tmp) throws Exception {
+    void hardenedSaxWithAllowListBlocksNonAllowed() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.xml",
-                "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final SAXParserFactory factory = XmlFactories.newSAXParserFactory();
         factory.setXIncludeAware(true);
         final XMLReader reader = factory.newSAXParser().getXMLReader();
         reader.setEntityResolver(new AllowListResolver("/nonexistent"));
-        assertThrows(Exception.class, () -> reader.parse(xmlFile.getAbsolutePath()),
+        assertThrows(Exception.class, () -> reader.parse(input),
                 "SAX with allow-list should block non-allowed href");
     }
 
-    // ── Piotr scenario: XInclude-enabled reader from external source → harden() → blocked ────────────────────────────
-    //
-    // An unhardened SAXParserFactory with setXIncludeAware(true) produces a reader where XInclude is active.
-    // Passing that reader through XmlFactories.harden() must install a deny-all EntityResolver that blocks
-    // xi:include href resolution, even though XInclude was enabled before hardening.
+    //endregion
+
+    //region harden(XMLReader): reader with XInclude enabled before hardening is blocked
 
     @Test
     @Tag("sax")
-    void hardenReaderBlocksParseXml(@TempDir final Path tmp) throws Exception {
+    void hardenReaderBlocksParseXml() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.xml",
-                "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         // Reader from an unhardened factory that already has XInclude enabled
         final SAXParserFactory unhardenedFactory = SAXParserFactory.newInstance();
@@ -392,41 +357,37 @@ class XIncludeTest {
         unhardenedFactory.setXIncludeAware(true);
         final XMLReader reader = unhardenedFactory.newSAXParser().getXMLReader();
         XmlFactories.harden(reader);
-        assertThrows(Exception.class, () -> reader.parse(xmlFile.getAbsolutePath()),
+        assertThrows(Exception.class, () -> reader.parse(input),
                 "harden(reader) should block XInclude parse=xml on reader with XInclude already enabled");
     }
 
     @Test
     @Tag("sax")
-    void hardenReaderBlocksParseText(@TempDir final Path tmp) throws Exception {
+    void hardenReaderBlocksParseText() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.txt",
-                LEAKED_MARKER + "\n").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "text"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final SAXParserFactory unhardenedFactory = SAXParserFactory.newInstance();
         unhardenedFactory.setNamespaceAware(true);
         unhardenedFactory.setXIncludeAware(true);
         final XMLReader reader = unhardenedFactory.newSAXParser().getXMLReader();
         XmlFactories.harden(reader);
-        assertThrows(Exception.class, () -> reader.parse(xmlFile.getAbsolutePath()),
+        assertThrows(Exception.class, () -> reader.parse(input),
                 "harden(reader) should block XInclude parse=text on reader with XInclude already enabled");
     }
 
     @Test
     @Tag("sax")
-    void hardenReaderAllowListResolvesParseXml(@TempDir final Path tmp) throws Exception {
+    void hardenReaderAllowListResolvesParseXml() throws Exception {
         assumeXIncludeSupported();
-        final String referencedUrl = writePayload(tmp, "ref.xml",
-                "<?xml version=\"1.0\"?><content>" + LEAKED_MARKER + "</content>").toURI().toString();
-        final File xmlFile = writePayload(tmp, "input.xml", xiIncludeXml(referencedUrl, "xml"));
+        final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final SAXParserFactory unhardenedFactory = SAXParserFactory.newInstance();
         unhardenedFactory.setNamespaceAware(true);
         unhardenedFactory.setXIncludeAware(true);
         final XMLReader reader = unhardenedFactory.newSAXParser().getXMLReader();
         XmlFactories.harden(reader);
-        reader.setEntityResolver(new AllowListResolver(referencedUrl));
+        reader.setEntityResolver(new AllowListResolver(REFERENCED_XML));
         final StringBuilder captured = new StringBuilder();
         reader.setContentHandler(new DefaultHandler() {
             @Override
@@ -434,8 +395,10 @@ class XIncludeTest {
                 captured.append(ch, start, length);
             }
         });
-        reader.parse(xmlFile.getAbsolutePath());
+        reader.parse(input);
         assertTrue(captured.toString().contains("resolved"),
                 "harden(reader) + allow-list should resolve on reader with XInclude already enabled; got: " + captured);
     }
+
+    //endregion
 }
