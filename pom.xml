@@ -119,6 +119,9 @@
 
     <!-- Flatten Maven plugin: produces a consumer POM at deploy time. -->
     <flatten-maven-plugin.version>1.7.3</flatten-maven-plugin.version>
+
+    <!-- forbidden-apis: enforces the SECURITY.md "no host side-effects" promises at build time. -->
+    <forbiddenapis.version>3.10</forbiddenapis.version>
   </properties>
 
   <dependencies>
@@ -410,6 +413,58 @@
             <phase>clean</phase>
             <goals>
               <goal>clean</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Enforce the SECURITY.md "Assumptions about the environment" promises at build time.
+      -->
+      <plugin>
+        <groupId>de.thetaphi</groupId>
+        <artifactId>forbiddenapis</artifactId>
+        <version>${forbiddenapis.version}</version>
+        <configuration>
+          <!-- Some signatures below name JDK-internal classes that need not be on every classpath. -->
+          <ignoreSignaturesOfMissingClasses>true</ignoreSignaturesOfMissingClasses>
+          <signatures>
+            # Promise: the library never reads environment variables (it reads system properties only).
+            java.lang.System#getenv() @ Reads the process environment; SECURITY.md promises the library reads system properties only.
+            java.lang.System#getenv(java.lang.String) @ Reads the process environment; SECURITY.md promises the library reads system properties only.
+
+            # Promise: the library never spawns processes.
+            java.lang.ProcessBuilder @ Spawns a process; SECURITY.md promises the library does not spawn processes.
+            java.lang.Runtime#exec(java.lang.String) @ Spawns a process; SECURITY.md promises the library does not spawn processes.
+            java.lang.Runtime#exec(java.lang.String[]) @ Spawns a process; SECURITY.md promises the library does not spawn processes.
+            java.lang.Runtime#exec(java.lang.String,java.lang.String[]) @ Spawns a process; SECURITY.md promises the library does not spawn processes.
+            java.lang.Runtime#exec(java.lang.String[],java.lang.String[]) @ Spawns a process; SECURITY.md promises the library does not spawn processes.
+            java.lang.Runtime#exec(java.lang.String,java.lang.String[],java.io.File) @ Spawns a process; SECURITY.md promises the library does not spawn processes.
+            java.lang.Runtime#exec(java.lang.String[],java.lang.String[],java.io.File) @ Spawns a process; SECURITY.md promises the library does not spawn processes.
+
+            # Promise: the library never installs signal handlers.
+            sun.misc.Signal @ Installs a signal handler; SECURITY.md promises the library does not install signal handlers.
+            sun.misc.SignalHandler @ Installs a signal handler; SECURITY.md promises the library does not install signal handlers.
+
+            # Promise: the library never opens network connections.
+            java.net.Socket @ Opens a network connection; SECURITY.md promises the library does not open network connections.
+            java.net.ServerSocket @ Opens a network connection; SECURITY.md promises the library does not open network connections.
+            java.net.DatagramSocket @ Opens a network connection; SECURITY.md promises the library does not open network connections.
+            java.net.http.HttpClient @ Opens a network connection; SECURITY.md promises the library does not open network connections.
+            java.nio.channels.SocketChannel @ Opens a network connection; SECURITY.md promises the library does not open network connections.
+            java.nio.channels.ServerSocketChannel @ Opens a network connection; SECURITY.md promises the library does not open network connections.
+            java.nio.channels.DatagramChannel @ Opens a network connection; SECURITY.md promises the library does not open network connections.
+            java.net.URL#openConnection() @ Opens a network connection; SECURITY.md promises the library does not open network connections.
+            java.net.URL#openConnection(java.net.Proxy) @ Opens a network connection; SECURITY.md promises the library does not open network connections.
+            java.net.URL#openStream() @ Opens a network connection; SECURITY.md promises the library does not open network connections.
+            java.net.URL#getContent() @ Opens a network connection; SECURITY.md promises the library does not open network connections.
+            java.net.URL#getContent(java.lang.Class[]) @ Opens a network connection; SECURITY.md promises the library does not open network connections.
+          </signatures>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>check</goal>
             </goals>
           </execution>
         </executions>

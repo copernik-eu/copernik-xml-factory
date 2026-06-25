@@ -60,9 +60,11 @@ listed below. Which hardening recipe applies depends on the JAXP implementation 
 
 **System properties that modify behaviour**
 
-The processing limits are read from the following JDK system properties when a factory or parser is created, and the
-same value is applied to the bundled parsers. If a property is unset, the JDK 25 secure value shown applies; a deployer
-may set it to tighten (or loosen) a limit globally.
+When a factory or parser is created, the library reads the following JDK system properties and pins each value on every
+recognised parser, including bundled ones that ignore `jdk.xml.*` on their own. If a property is unset, the fixed value
+shown applies (matching the JDK 25 secure default), regardless of the JDK in use. These properties are trusted
+deployment configuration: an operator may set one to tighten (or loosen) a limit globally, but loosening through one is
+reconfiguration, treated like loosening any other reserved setting (see [What is out of scope](#what-is-out-of-scope)).
 
 - `jdk.xml.elementAttributeLimit`: `200`
 - `jdk.xml.entityExpansionLimit`: `2500`
@@ -186,5 +188,5 @@ A report judged against this model receives exactly one of:
 
 Revise this model when any of the following change: a new `XmlFactories` factory method or other public
 surface; support for a JAXP implementation beyond those listed under [What is in scope](#what-is-in-scope);
-a change in the JDK secure defaults that the processing-limit list records; a new reserved setting; or a
+a change in the pinned processing-limit defaults this list records; a new reserved setting; or a
 report that cannot be routed to one of the dispositions above.
