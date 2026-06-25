@@ -79,14 +79,26 @@ class XIncludeTest {
     }
 
     /**
-     * Assumes XInclude is supported by the platform: on Android {@code setXIncludeAware(true)} always throws
-     * {@link UnsupportedOperationException}, so every test in this class must be skipped there.
+     * Enables XInclude on the factory under test, skipping the test when the platform refuses.
+     *
+     * <p>On Android{@code setXIncludeAware(true)} always throws {@link UnsupportedOperationException}.</p>
      */
-    private static void assumeXIncludeSupported() {
-        final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-        dbf.setNamespaceAware(true);
+    private static void assumeXIncludeAware(final DocumentBuilderFactory factory) {
         try {
-            dbf.setXIncludeAware(true);
+            factory.setXIncludeAware(true);
+        } catch (final UnsupportedOperationException e) {
+            Assumptions.abort("XInclude not supported on this platform");
+        }
+    }
+
+    /**
+     * Enables XInclude on the factory under test, skipping the test when the platform refuses.
+     *
+     * <p>On Android{@code setXIncludeAware(true)} always throws {@link UnsupportedOperationException}.</p>
+     */
+    private static void assumeXIncludeAware(final SAXParserFactory factory) {
+        try {
+            factory.setXIncludeAware(true);
         } catch (final UnsupportedOperationException e) {
             Assumptions.abort("XInclude not supported on this platform");
         }
@@ -97,12 +109,11 @@ class XIncludeTest {
     @Test
     @Tag("dom")
     void baselineDomLeaksParseXml() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         final Document doc = factory.newDocumentBuilder().parse(input);
         final String text = doc.getDocumentElement().getTextContent();
         assertTrue(text != null && text.contains(LEAKED_MARKER),
@@ -112,12 +123,11 @@ class XIncludeTest {
     @Test
     @Tag("dom")
     void baselineDomLeaksParseText() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         final Document doc = factory.newDocumentBuilder().parse(input);
         final String text = doc.getDocumentElement().getTextContent();
         assertTrue(text != null && text.contains(LEAKED_MARKER),
@@ -127,12 +137,11 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void baselineSaxLeaksParseXml() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final SAXParserFactory factory = SAXParserFactory.newInstance();
         factory.setNamespaceAware(true);
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         final StringBuilder captured = new StringBuilder();
         final XMLReader reader = factory.newSAXParser().getXMLReader();
         reader.setContentHandler(new DefaultHandler() {
@@ -149,12 +158,11 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void baselineSaxLeaksParseText() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final SAXParserFactory factory = SAXParserFactory.newInstance();
         factory.setNamespaceAware(true);
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         final StringBuilder captured = new StringBuilder();
         final XMLReader reader = factory.newSAXParser().getXMLReader();
         reader.setContentHandler(new DefaultHandler() {
@@ -175,12 +183,11 @@ class XIncludeTest {
     @Test
     @Tag("dom")
     void hardenedDomBlocksParseXml() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final DocumentBuilderFactory factory = XmlFactories.newDocumentBuilderFactory();
         factory.setNamespaceAware(true);
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         assertThrows(Exception.class, () -> {
             final DocumentBuilder builder = factory.newDocumentBuilder();
             builder.parse(input);
@@ -190,12 +197,11 @@ class XIncludeTest {
     @Test
     @Tag("dom")
     void hardenedDomBlocksParseText() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final DocumentBuilderFactory factory = XmlFactories.newDocumentBuilderFactory();
         factory.setNamespaceAware(true);
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         assertThrows(Exception.class, () -> {
             final DocumentBuilder builder = factory.newDocumentBuilder();
             builder.parse(input);
@@ -205,11 +211,10 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenedSaxBlocksParseXml() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final SAXParserFactory factory = XmlFactories.newSAXParserFactory();
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         assertThrows(Exception.class, () -> {
             final XMLReader reader = factory.newSAXParser().getXMLReader();
             reader.parse(input);
@@ -219,11 +224,10 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenedSaxBlocksParseText() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final SAXParserFactory factory = XmlFactories.newSAXParserFactory();
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         assertThrows(Exception.class, () -> {
             final XMLReader reader = factory.newSAXParser().getXMLReader();
             reader.parse(input);
@@ -237,12 +241,11 @@ class XIncludeTest {
     @Test
     @Tag("dom")
     void hardenedDomWithAllowListResolvesParseXml() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final DocumentBuilderFactory factory = XmlFactories.newDocumentBuilderFactory();
         factory.setNamespaceAware(true);
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         final DocumentBuilder builder = factory.newDocumentBuilder();
         builder.setEntityResolver(new AllowListResolver(REFERENCED_XML));
         final Document doc = builder.parse(input);
@@ -254,12 +257,11 @@ class XIncludeTest {
     @Test
     @Tag("dom")
     void hardenedDomWithAllowListResolvesParseText() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final DocumentBuilderFactory factory = XmlFactories.newDocumentBuilderFactory();
         factory.setNamespaceAware(true);
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         final DocumentBuilder builder = factory.newDocumentBuilder();
         builder.setEntityResolver(new AllowListResolver(REFERENCED_TEXT));
         final Document doc = builder.parse(input);
@@ -271,12 +273,11 @@ class XIncludeTest {
     @Test
     @Tag("dom")
     void hardenedDomWithAllowListBlocksNonAllowed() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final DocumentBuilderFactory factory = XmlFactories.newDocumentBuilderFactory();
         factory.setNamespaceAware(true);
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         final DocumentBuilder builder = factory.newDocumentBuilder();
         builder.setEntityResolver(new AllowListResolver("/nonexistent"));
         assertThrows(Exception.class, () -> builder.parse(input),
@@ -286,11 +287,10 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenedSaxWithAllowListResolvesParseXml() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final SAXParserFactory factory = XmlFactories.newSAXParserFactory();
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         final XMLReader reader = factory.newSAXParser().getXMLReader();
         reader.setEntityResolver(new AllowListResolver(REFERENCED_XML));
         final StringBuilder captured = new StringBuilder();
@@ -308,11 +308,10 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenedSaxWithAllowListResolvesParseText() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final SAXParserFactory factory = XmlFactories.newSAXParserFactory();
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         final XMLReader reader = factory.newSAXParser().getXMLReader();
         reader.setEntityResolver(new AllowListResolver(REFERENCED_TEXT));
         final StringBuilder captured = new StringBuilder();
@@ -330,11 +329,10 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenedSaxWithAllowListBlocksNonAllowed() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final SAXParserFactory factory = XmlFactories.newSAXParserFactory();
-        factory.setXIncludeAware(true);
+        assumeXIncludeAware(factory);
         final XMLReader reader = factory.newSAXParser().getXMLReader();
         reader.setEntityResolver(new AllowListResolver("/nonexistent"));
         assertThrows(Exception.class, () -> reader.parse(input),
@@ -348,13 +346,12 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenReaderBlocksParseXml() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         // Reader from an unhardened factory that already has XInclude enabled
         final SAXParserFactory unhardenedFactory = SAXParserFactory.newInstance();
         unhardenedFactory.setNamespaceAware(true);
-        unhardenedFactory.setXIncludeAware(true);
+        assumeXIncludeAware(unhardenedFactory);
         final XMLReader reader = unhardenedFactory.newSAXParser().getXMLReader();
         XmlFactories.harden(reader);
         assertThrows(Exception.class, () -> reader.parse(input),
@@ -364,12 +361,11 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenReaderBlocksParseText() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_TEXT, "text"));
 
         final SAXParserFactory unhardenedFactory = SAXParserFactory.newInstance();
         unhardenedFactory.setNamespaceAware(true);
-        unhardenedFactory.setXIncludeAware(true);
+        assumeXIncludeAware(unhardenedFactory);
         final XMLReader reader = unhardenedFactory.newSAXParser().getXMLReader();
         XmlFactories.harden(reader);
         assertThrows(Exception.class, () -> reader.parse(input),
@@ -379,12 +375,11 @@ class XIncludeTest {
     @Test
     @Tag("sax")
     void hardenReaderAllowListResolvesParseXml() throws Exception {
-        assumeXIncludeSupported();
         final InputSource input = inputSource(xiIncludeXml(REFERENCED_XML, "xml"));
 
         final SAXParserFactory unhardenedFactory = SAXParserFactory.newInstance();
         unhardenedFactory.setNamespaceAware(true);
-        unhardenedFactory.setXIncludeAware(true);
+        assumeXIncludeAware(unhardenedFactory);
         final XMLReader reader = unhardenedFactory.newSAXParser().getXMLReader();
         XmlFactories.harden(reader);
         reader.setEntityResolver(new AllowListResolver(REFERENCED_XML));
