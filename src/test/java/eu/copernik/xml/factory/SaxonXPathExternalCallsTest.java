@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
  * URI it receives. They are <em>not</em> classified as extension functions in Saxon's vocabulary, so disabling {@code ALLOW_EXTERNAL_FUNCTIONS} is not enough
  * to block them; a complete hardening has to close the URI-resolution path.</p>
  *
- * <p>Each fixture under {@code src/test/resources/leaked/} contains the {@link #MARKER} string. The tests dispatch the URI-fetching function at the file's URL
+ * <p>Each fixture under {@code src/test/resources/leaked/} contains the {@link AttackTestSupport#LEAKED_MARKER} string. The tests dispatch the URI-fetching function at the file's URL
  * and check whether the marker reaches the result.</p>
  *
  * <p>Cases covered, each as a pair (unconfigured Saxon factory expected to leak, hardened Saxon factory expected to block):</p>
@@ -41,7 +41,6 @@ import org.junit.jupiter.api.Test;
 @Tag("xpath3")
 class SaxonXPathExternalCallsTest {
 
-    private static final String MARKER = "All your base are belong to us";
     private static final String SAXON_XPATH_FACTORY_CLASS = "net.sf.saxon.xpath.XPathFactoryImpl";
 
     private static void assertCallExcludesMarker(final XPathFactory factory, final String expression) {
@@ -51,8 +50,8 @@ class SaxonXPathExternalCallsTest {
         } catch (final Exception e) {
             return; // hardening blocked at evaluation; acceptable outcome.
         }
-        assertFalse(result.contains(MARKER),
-                "Hardening did not block the external reference; result contained marker '" + MARKER + "'.\nFull result:\n" + result);
+        assertFalse(result.contains(AttackTestSupport.LEAKED_MARKER),
+                "Hardening did not block the external reference; result contained marker '" + AttackTestSupport.LEAKED_MARKER + "'.\nFull result:\n" + result);
     }
 
     private static void assertCallLeaksMarker(final XPathFactory factory, final String expression) {
@@ -63,8 +62,8 @@ class SaxonXPathExternalCallsTest {
             fail("Unconfigured Saxon XPath should resolve the external resource, but threw: " + e);
             return;
         }
-        assertTrue(result.contains(MARKER),
-                "Expected marker '" + MARKER + "' in result, got: " + result);
+        assertTrue(result.contains(AttackTestSupport.LEAKED_MARKER),
+                "Expected marker '" + AttackTestSupport.LEAKED_MARKER + "' in result, got: " + result);
     }
 
     private static String docExpression() {

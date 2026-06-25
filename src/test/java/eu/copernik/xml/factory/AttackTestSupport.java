@@ -169,7 +169,7 @@ final class AttackTestSupport {
      * <p>Tests that capture a parser's output assert this string is absent: it can only appear if the hardened parser fetched the external resource, so its
      * presence is the leak signal.</p>
      */
-    static final String LEAKED_MARKER = "All your base are belong to us";
+    static final String LEAKED_MARKER = "SSRF-LEAK-376e7ef1-0157-49e2-a1f9-be031f4de093";
     private static final StrictReporter STRICT_REPORTER = new StrictReporter();
 
     /**
