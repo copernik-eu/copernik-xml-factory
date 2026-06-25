@@ -189,9 +189,11 @@ public final class XmlFactories {
     /**
      * Returns a fresh, hardened {@link DocumentBuilderFactory}.
      *
-     * <p>Beyond the three universal guarantees on {@link XmlFactories}, XInclude resolution is disabled. Calling
-     * {@link DocumentBuilderFactory#setXIncludeAware(boolean) setXIncludeAware(true)} on the returned factory does not re-enable resolution; a parse that
-     * encounters an {@code xi:include} element fails.</p>
+     * <p>Beyond the three universal guarantees on {@link XmlFactories}, XInclude resolution is denied by default.
+     * When {@link DocumentBuilderFactory#setXIncludeAware(boolean) setXIncludeAware(true)} is called on the returned
+     * factory, the parser will process {@code xi:include} elements but every external resource lookup is rejected.
+     * To permit specific trusted resources, install an {@link org.xml.sax.EntityResolver EntityResolver} on the
+     * {@link DocumentBuilder} that allow-lists them; any href the resolver does not explicitly allow stays blocked.</p>
      *
      * @return a hardened factory.
      * @throws IllegalStateException if the underlying JAXP implementation is not recognised by any bundled hardening recipe, or if the matching recipe cannot
@@ -204,9 +206,12 @@ public final class XmlFactories {
     /**
      * Returns a fresh, hardened {@link SAXParserFactory}.
      *
-     * <p>Beyond the three universal guarantees on {@link XmlFactories}, XInclude resolution is disabled. Calling
-     * {@link SAXParserFactory#setXIncludeAware(boolean) setXIncludeAware(true)} on the returned factory does not re-enable resolution; a parse that encounters
-     * an {@code xi:include} element fails.</p>
+     * <p>Beyond the three universal guarantees on {@link XmlFactories}, XInclude resolution is denied by default.
+     * When {@link SAXParserFactory#setXIncludeAware(boolean) setXIncludeAware(true)} is called on the returned
+     * factory, the parser will process {@code xi:include} elements but every external resource lookup is rejected.
+     * To permit specific trusted resources, install an {@link org.xml.sax.EntityResolver EntityResolver} on the
+     * {@link org.xml.sax.XMLReader} that allow-lists them; any href the resolver does not explicitly allow stays
+     * blocked.</p>
      *
      * @return a hardened factory.
      * @throws IllegalStateException if the underlying JAXP implementation is not recognised by any bundled hardening recipe, or if the matching recipe cannot
