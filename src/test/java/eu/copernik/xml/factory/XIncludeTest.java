@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.StringReader;
 import java.nio.file.Path;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -58,8 +59,10 @@ class XIncludeTest {
         @Override
         public InputSource resolveEntity(final String publicId, final String systemId) throws SAXException, IOException {
             if (allowedUrl.equals(systemId)) {
-                return new InputSource(new java.io.StringReader(
-                        "<allowed xmlns:xi=\"http://www.w3.org/2001/XInclude\">resolved</allowed>"));
+                InputSource inputSource = new InputSource(new StringReader("<allowed xmlns:xi=\"http://www.w3.org/2001/XInclude\">resolved</allowed>"));
+                inputSource.setPublicId(publicId);
+                inputSource.setSystemId(systemId);
+                return inputSource;
             }
             throw new SAXException("Blocked by allow-list resolver: " + systemId);
         }
