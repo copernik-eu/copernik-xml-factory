@@ -107,7 +107,7 @@
     <commons.xerces.version>2.12.2</commons.xerces.version>
 
     <!-- Sonatype Central Publishing -->
-    <central.publishing.version>0.10.0</central.publishing.version>
+    <central.publishing.version>0.11.0</central.publishing.version>
     <!-- We use Central and the `deploy` goal auto-detection does not currently work with it -->
     <cyclonedx.skipNotDeployed>false</cyclonedx.skipNotDeployed>
 
